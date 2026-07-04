@@ -33,3 +33,13 @@ export async function saveStorageState(context, hostname) {
   await context.storageState({ path: storagePath });
   return storagePath;
 }
+
+export function readStorageStateData(hostname) {
+  const storagePath = getStoragePathForHost(hostname);
+  if (!storagePath || !fs.existsSync(storagePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(storagePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}

@@ -17,6 +17,9 @@ const ALLOWED_KEYS = [
   'browser_headless',
   'browser_warmup',
   'browser_warmup_wait_ms',
+  'browser_human_behavior',
+  'browser_replay_cookies',
+  'browser_tls_mode',
   'output_path',
 ];
 

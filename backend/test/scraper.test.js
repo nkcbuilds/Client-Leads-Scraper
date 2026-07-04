@@ -34,6 +34,28 @@ test('detectBlockedPage does not false-positive on readable pages with challenge
   assert.equal(reason, null);
 });
 
+test('detectBlockedPage does not false-positive on readable pages with hidden access denied text', () => {
+  const html = `
+    <html>
+      <head><title>L500 | India | Law firm and lawyer rankings from Legal 500 guide</title></head>
+      <body>
+        <main>
+          <h1>India</h1>
+          <p>These tables show the best performing law firms overall in our rankings in this jurisdiction based on our assessment of aggregated rankings across all practice areas.</p>
+          <p>Argus Partners Firm profile AZB & Partners Firm profile Cyril Amarchand Mangaldas Firm profile DSK Legal Firm profile Economic Laws Practice Firm profile.</p>
+          <p>Additional visible ranking content continues here so the page is clearly readable and should not be treated as blocked.</p>
+        </main>
+        <script>
+          window.__EDGE_FLAGS__ = { message: "Access denied" };
+        </script>
+        <script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>
+      </body>
+    </html>
+  `;
+  const reason = detectBlockedPage(html, 'L500 | India | Law firm and lawyer rankings from Legal 500 guide');
+  assert.equal(reason, null);
+});
+
 test('extractTextContent strips scripts and nav', () => {
   const html = '<html><head><title>Test</title></head><body><nav>Menu</nav><p>Hello world content here for testing extraction pipeline with enough text.</p></body></html>';
   const { text, textLength } = extractTextContent(html);

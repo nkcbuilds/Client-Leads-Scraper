@@ -146,8 +146,9 @@ export async function processJob(job) {
 
   pageTextMap[seedResult.url] = seedResult.text;
 
-  const links = extractLinks(seedResult.html, job.url);
-  const classification = await classifyPage(job.url, seedResult.html, seedResult.text, links);
+  const resolvedSeedUrl = seedResult.url || job.url;
+  const links = extractLinks(seedResult.html, resolvedSeedUrl);
+  const classification = await classifyPage(resolvedSeedUrl, seedResult.html, seedResult.text, links);
 
   logger.info('Page classified', {
     jobId: job.id,
@@ -158,7 +159,7 @@ export async function processJob(job) {
 
   addScrapeLog({
     jobId: job.id,
-    url: job.url,
+    url: resolvedSeedUrl,
     status: 'classified',
     pageType: classification.type,
     message: classification.reason,
@@ -167,15 +168,16 @@ export async function processJob(job) {
 
   useScroll = classification.type === PAGE_TYPES.PROFILE_DIRECTORY;
 
-  let urlsToCrawl = await buildCrawlPlan(classification, job.url, links);
+  let urlsToCrawl = await buildCrawlPlan(classification, resolvedSeedUrl, links);
 
   if (useScroll) {
     logger.info('Re-scraping directory with scroll for lazy-loaded listings', { jobId: job.id });
-    const scrolled = await scrapePage(job.url, { timeoutMs, scroll: true });
+    const scrolled = await scrapePage(resolvedSeedUrl, { timeoutMs, scroll: true });
     if (scrolled.success) {
-      pageTextMap[job.url] = scrolled.text;
-      const scrolledLinks = extractLinks(scrolled.html, job.url);
-      urlsToCrawl = await buildCrawlPlan(classification, job.url, scrolledLinks);
+      pageTextMap[scrolled.url] = scrolled.text;
+      const scrolledBaseUrl = scrolled.url || resolvedSeedUrl;
+      const scrolledLinks = extractLinks(scrolled.html, scrolledBaseUrl);
+      urlsToCrawl = await buildCrawlPlan(classification, scrolledBaseUrl, scrolledLinks);
       Object.assign(seedResult, scrolled);
     }
   }
@@ -186,14 +188,14 @@ export async function processJob(job) {
     logger.info('People extracted from seed', { jobId: job.id, count: seedExtract.people.length, method: seedExtract.method });
   }
 
-  let remainingUrls = urlsToCrawl.filter((u) => u !== job.url);
+  let remainingUrls = urlsToCrawl.filter((u) => u !== resolvedSeedUrl);
 
   if (
     classification.type === PAGE_TYPES.LIST_PAGE &&
     allPeople.length < MIN_SEED_RECORDS_TO_SKIP_DETAIL_PAGES
   ) {
-    const detailLinks = findLeadDetailLinks(links, job.url)
-      .filter((url) => url !== job.url)
+      const detailLinks = findLeadDetailLinks(links, resolvedSeedUrl)
+      .filter((url) => url !== resolvedSeedUrl)
       .slice(0, MAX_PAGINATION_PAGES);
     if (detailLinks.length > 0) {
       logger.info('Adding lead-rich detail pages for shallow list result', {

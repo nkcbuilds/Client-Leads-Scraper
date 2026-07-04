@@ -13,6 +13,7 @@ import {
   isCloudflareChallenge,
   waitForChallengeResolution,
 } from './stealth.js';
+import { simulateHumanActivity, humanScroll } from './humanBehavior.js';
 
 const BLOCK_INDICATORS = [
   'cf-browser-verification',
@@ -24,16 +25,16 @@ const BLOCK_INDICATORS = [
 ];
 
 export function detectBlockedPage(html, title) {
-  const combined = `${title || ''} ${html || ''}`.toLowerCase();
-
   const $ = cheerio.load(html || '');
   const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
   const mainText = $('main, article').text().replace(/\s+/g, ' ').trim();
-  const hasChallengeScript = combined.includes('challenge-platform');
+  const visibleText = `${title || ''} ${mainText} ${bodyText}`.toLowerCase();
+  const rawHtml = `${title || ''} ${html || ''}`.toLowerCase();
+  const hasChallengeScript = rawHtml.includes('challenge-platform');
   const hasVisibleContent = bodyText.length > 500 || mainText.length > 200;
 
   for (const indicator of BLOCK_INDICATORS) {
-    if (combined.includes(indicator.toLowerCase())) {
+    if (visibleText.includes(indicator.toLowerCase()) && !hasVisibleContent) {
       return indicator;
     }
   }
@@ -102,6 +103,12 @@ async function fetchHtmlInBrowser(page, url) {
   }, url);
 }
 
+async function maybeSimulateHuman(page) {
+  const { humanBehaviorEnabled } = getCrawlSettings();
+  if (!humanBehaviorEnabled) return;
+  await simulateHumanActivity(page, { intensity: 'medium' });
+}
+
 async function warmUpDomain(session, url, timeoutMs) {
   const { warmupEnabled, warmupWaitMs } = getCrawlSettings();
   if (!warmupEnabled || session.warmed) return;
@@ -120,10 +127,13 @@ async function warmUpDomain(session, url, timeoutMs) {
       waitUntil: 'domcontentloaded',
       timeout: timeoutMs,
     });
+    await maybeSimulateHuman(session.page);
     await session.page.waitForTimeout(warmupWaitMs);
 
     if (isCloudflareChallenge(await session.page.title(), await session.page.content())) {
-      const passed = await waitForChallengeResolution(session.page, Math.max(timeoutMs, 30000));
+      const passed = await waitForChallengeResolution(session.page, Math.max(timeoutMs, 30000), {
+        onWait: () => maybeSimulateHuman(session.page),
+      });
       if (!passed) {
         logger.warn('Cloudflare challenge may not have cleared during warm-up', {
           hostname: session.hostname,
@@ -143,22 +153,28 @@ async function warmUpDomain(session, url, timeoutMs) {
 
 async function waitForContent(page, { scroll = false, timeoutMs = 30000 } = {}) {
   await page.waitForTimeout(2000);
+  await maybeSimulateHuman(page);
 
   if (scroll) {
-    await page.evaluate(async () => {
-      await new Promise((resolve) => {
-        let total = 0;
-        const step = 400;
-        const timer = setInterval(() => {
-          window.scrollBy(0, step);
-          total += step;
-          if (total >= document.body.scrollHeight) {
-            clearInterval(timer);
-            resolve();
-          }
-        }, 150);
+    const { humanBehaviorEnabled } = getCrawlSettings();
+    if (humanBehaviorEnabled) {
+      await humanScroll(page, { steps: 8, distance: 360 });
+    } else {
+      await page.evaluate(async () => {
+        await new Promise((resolve) => {
+          let total = 0;
+          const step = 400;
+          const timer = setInterval(() => {
+            window.scrollBy(0, step);
+            total += step;
+            if (total >= document.body.scrollHeight) {
+              clearInterval(timer);
+              resolve();
+            }
+          }, 150);
+        });
       });
-    });
+    }
     await page.waitForTimeout(2500);
   }
 
@@ -229,7 +245,9 @@ async function navigateAndCapture(session, url, { timeoutMs, scroll, maxRetries 
   );
 
   if (isCloudflareChallenge(await session.page.title(), await session.page.content())) {
-    await waitForChallengeResolution(session.page, Math.max(timeoutMs, 30000));
+    await waitForChallengeResolution(session.page, Math.max(timeoutMs, 30000), {
+      onWait: () => maybeSimulateHuman(session.page),
+    });
   }
 
   await waitForContent(session.page, { scroll, timeoutMs });
@@ -237,9 +255,10 @@ async function navigateAndCapture(session, url, { timeoutMs, scroll, maxRetries 
   const html = await session.page.content();
   const pageTitle = await session.page.title();
   const statusCode = response ? response.status() : null;
+  const finalUrl = session.page.url();
 
   return buildScrapeResult({
-    url,
+    url: finalUrl || url,
     html,
     pageTitle,
     statusCode,
@@ -249,16 +268,25 @@ async function navigateAndCapture(session, url, { timeoutMs, scroll, maxRetries 
 
 async function fetchAndCapture(session, url) {
   logger.info('Attempting in-browser fetch fallback', { url, hostname: session.hostname });
-  const fetched = await fetchHtmlInBrowser(session.page, url);
-  const pageTitle = cheerio.load(fetched.html || '')('title').text().trim() || '';
+  try {
+    const fetched = await fetchHtmlInBrowser(session.page, url);
+    const pageTitle = cheerio.load(fetched.html || '')('title').text().trim() || '';
 
-  return buildScrapeResult({
-    url: fetched.finalUrl || url,
-    html: fetched.html,
-    pageTitle,
-    statusCode: fetched.status,
-    method: 'in-browser-fetch',
-  });
+    return buildScrapeResult({
+      url: fetched.finalUrl || url,
+      html: fetched.html,
+      pageTitle,
+      statusCode: fetched.status,
+      method: 'in-browser-fetch',
+    });
+  } catch (err) {
+    logger.warn('In-browser fetch fallback failed', {
+      url,
+      hostname: session.hostname,
+      error: err.message?.slice(0, 160),
+    });
+    return null;
+  }
 }
 
 async function scrapeWithSession(url, { timeoutMs, scroll, maxRetries, allowSessionReset }) {
@@ -271,7 +299,7 @@ async function scrapeWithSession(url, { timeoutMs, scroll, maxRetries, allowSess
 
   if (result.blocked || (!result.success && result.textLength < 100)) {
     const fetchResult = await fetchAndCapture(session, url);
-    if (fetchResult.success) {
+    if (fetchResult?.success) {
       result = fetchResult;
     }
   }
@@ -289,7 +317,7 @@ async function scrapeWithSession(url, { timeoutMs, scroll, maxRetries, allowSess
 
     if (result.blocked || (!result.success && result.textLength < 100)) {
       const fetchResult = await fetchAndCapture(freshSession, url);
-      if (fetchResult.success) {
+      if (fetchResult?.success) {
         result = fetchResult;
       }
     }

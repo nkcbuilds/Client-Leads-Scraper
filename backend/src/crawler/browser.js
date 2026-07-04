@@ -1,20 +1,30 @@
 import { chromium } from 'playwright';
 import { logger } from '../utils/logger.js';
 import { getCrawlSettings } from '../db/settings.js';
-import { STEALTH_INIT_SCRIPT, getHostname } from './stealth.js';
+import { STEALTH_INIT_SCRIPT, getHostname, describeTlsMode } from './stealth.js';
 import { loadStorageStateIfExists, saveStorageState } from './session.js';
+import {
+  replayCookiesIntoContext,
+  updateClearanceRegistry,
+  findReplayableStorageState,
+} from './cookieReplay.js';
 
 let browser = null;
 let browserLaunchMode = null;
+let tlsInfo = null;
 const domainSessions = new Map();
 
 function buildLaunchOptions() {
-  const { headless, useSystemChrome } = getCrawlSettings();
+  const { headless, useSystemChrome, tlsMode } = getCrawlSettings();
+  const forceChrome = tlsMode !== 'chromium-bundled' && useSystemChrome;
+
   const args = [
     '--disable-blink-features=AutomationControlled',
     '--disable-dev-shm-usage',
     '--no-sandbox',
     '--window-size=1920,1080',
+    '--disable-infobars',
+    '--disable-extensions',
   ];
 
   const options = {
@@ -22,10 +32,11 @@ function buildLaunchOptions() {
     args,
   };
 
-  if (useSystemChrome) {
+  if (forceChrome) {
     options.channel = 'chrome';
   }
 
+  tlsInfo = describeTlsMode({ useSystemChrome: forceChrome, tlsMode });
   return options;
 }
 
@@ -35,7 +46,11 @@ async function launchBrowser() {
   try {
     browser = await chromium.launch(options);
     browserLaunchMode = options.channel ? 'chrome' : 'chromium';
-    logger.info('Playwright browser launched', { mode: browserLaunchMode, headless: options.headless });
+    logger.info('Playwright browser launched', {
+      mode: browserLaunchMode,
+      headless: options.headless,
+      tls: tlsInfo,
+    });
     return browser;
   } catch (err) {
     if (options.channel) {
@@ -44,7 +59,12 @@ async function launchBrowser() {
       });
       browser = await chromium.launch({ headless: options.headless, args: options.args });
       browserLaunchMode = 'chromium-fallback';
-      logger.info('Playwright browser launched', { mode: browserLaunchMode, headless: options.headless });
+      tlsInfo = describeTlsMode({ useSystemChrome: false, tlsMode: 'chromium-bundled' });
+      logger.info('Playwright browser launched', {
+        mode: browserLaunchMode,
+        headless: options.headless,
+        tls: tlsInfo,
+      });
       return browser;
     }
     throw err;
@@ -62,6 +82,10 @@ export function getBrowserLaunchMode() {
   return browserLaunchMode;
 }
 
+export function getBrowserTlsInfo() {
+  return tlsInfo;
+}
+
 async function applyStealth(context) {
   const { stealthEnabled } = getCrawlSettings();
   if (!stealthEnabled) return;
@@ -69,9 +93,10 @@ async function applyStealth(context) {
 }
 
 function buildContextOptions(hostname) {
-  const { storageStatePath } = getCrawlSettings();
-  const persistedPath = loadStorageStateIfExists(hostname);
-  const storageState = persistedPath || (storageStatePath || null);
+  const { storageStatePath, replayCookies } = getCrawlSettings();
+  const replayable = replayCookies ? findReplayableStorageState(hostname) : null;
+  const persistedPath = replayable?.source || loadStorageStateIfExists(hostname);
+  const storageState = persistedPath || storageStatePath || null;
 
   const contextOptions = {
     userAgent:
@@ -81,6 +106,7 @@ function buildContextOptions(hostname) {
     timezoneId: 'America/New_York',
     extraHTTPHeaders: {
       'Accept-Language': 'en-US,en;q=0.9',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     },
   };
 
@@ -108,6 +134,11 @@ export async function getDomainSession(url, timeoutMs = 30000) {
   const context = await b.newContext(buildContextOptions(hostname));
   await applyStealth(context);
 
+  const { replayCookies } = getCrawlSettings();
+  if (replayCookies) {
+    await replayCookiesIntoContext(context, hostname);
+  }
+
   const page = await context.newPage();
   page.setDefaultTimeout(timeoutMs);
 
@@ -120,7 +151,12 @@ export async function getDomainSession(url, timeoutMs = 30000) {
   };
 
   domainSessions.set(hostname, session);
-  logger.info('Browser session created for domain', { hostname, reused: false });
+  logger.info('Browser session created for domain', {
+    hostname,
+    reused: false,
+    tls: tlsInfo?.mode,
+    replayCookies,
+  });
   return session;
 }
 
@@ -142,6 +178,8 @@ export async function persistDomainSession(hostname) {
   if (!session) return null;
   const saved = await saveStorageState(session.context, hostname);
   if (saved) {
+    const state = await session.context.storageState();
+    updateClearanceRegistry(hostname, state);
     logger.info('Browser session persisted', { hostname, path: saved });
   }
   return saved;
@@ -162,6 +200,7 @@ export async function closeBrowser() {
     await browser.close();
     browser = null;
     browserLaunchMode = null;
+    tlsInfo = null;
     logger.info('Playwright browser closed');
   }
 }

@@ -74,5 +74,10 @@ export function getCrawlSettings() {
       getSetting('browser_warmup_wait_ms', String(envInt('BROWSER_WARMUP_WAIT_MS', 8000))),
       10,
     ),
+    humanBehaviorEnabled:
+      getSetting('browser_human_behavior', String(envBool('BROWSER_HUMAN_BEHAVIOR', true))) !== 'false',
+    replayCookies:
+      getSetting('browser_replay_cookies', String(envBool('BROWSER_REPLAY_COOKIES', true))) !== 'false',
+    tlsMode: getSetting('browser_tls_mode', process.env.BROWSER_TLS_MODE || 'chrome-native'),
   };
 }

@@ -92,5 +92,8 @@ export const DEFAULT_SETTINGS = {
   browser_headless: 'true',
   browser_warmup: 'true',
   browser_warmup_wait_ms: '8000',
+  browser_human_behavior: 'true',
+  browser_replay_cookies: 'true',
+  browser_tls_mode: 'chrome-native',
   output_path: './output',
 };
