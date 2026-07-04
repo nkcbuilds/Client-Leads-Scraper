@@ -5,10 +5,18 @@ const router = Router();
 
 const ALLOWED_KEYS = [
   'crawl_delay_ms',
+  'crawl_delay_min_ms',
+  'crawl_delay_max_ms',
   'crawl_concurrency',
   'crawl_timeout_ms',
   'gemini_api_key',
   'browser_storage_state_path',
+  'browser_storage_state_dir',
+  'browser_stealth',
+  'browser_use_system_chrome',
+  'browser_headless',
+  'browser_warmup',
+  'browser_warmup_wait_ms',
   'output_path',
 ];
 

@@ -13,6 +13,7 @@ import { getScrapeLogsByJob } from '../db/scrapeLog.js';
 import { getJobById } from '../db/jobs.js';
 import { buildJobSummary } from '../utils/jobSummary.js';
 import { logger } from '../utils/logger.js';
+import { randomDelayMs } from './stealth.js';
 
 const MAX_PROFILE_PAGES = 25;
 const MAX_PAGINATION_PAGES = 10;
@@ -20,8 +21,9 @@ const MIN_SEED_RECORDS_TO_SKIP_PROFILES = 5;
 const MIN_SEED_RECORDS_TO_SKIP_DETAIL_PAGES = 5;
 
 async function delay() {
-  const { delayMs } = getCrawlSettings();
-  await new Promise((r) => setTimeout(r, delayMs));
+  const { delayMinMs, delayMaxMs, delayMs } = getCrawlSettings();
+  const waitMs = randomDelayMs(delayMinMs, delayMaxMs) || delayMs;
+  await new Promise((r) => setTimeout(r, waitMs));
 }
 
 function logPageResult(jobId, url, result, pageType) {
@@ -167,8 +169,8 @@ export async function processJob(job) {
 
   let urlsToCrawl = await buildCrawlPlan(classification, job.url, links);
 
-  if (useScroll && urlsToCrawl.length <= 1) {
-    logger.info('Re-scraping directory with scroll for profile links', { jobId: job.id });
+  if (useScroll) {
+    logger.info('Re-scraping directory with scroll for lazy-loaded listings', { jobId: job.id });
     const scrolled = await scrapePage(job.url, { timeoutMs, scroll: true });
     if (scrolled.success) {
       pageTextMap[job.url] = scrolled.text;

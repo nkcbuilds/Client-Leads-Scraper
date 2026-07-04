@@ -12,7 +12,8 @@
     "validate": "node src/scripts/validate-all.js",
     "validate:live": "node src/scripts/validate-run.js",
     "audit": "node src/scripts/audit-full.js",
-    "benchmark": "node src/scripts/benchmark-models.js"
+    "benchmark": "node src/scripts/benchmark-models.js",
+    "test:stealth": "node src/scripts/test-stealth-scrape.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

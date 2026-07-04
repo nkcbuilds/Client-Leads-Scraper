@@ -4,6 +4,7 @@ import { updateJobStatus } from '../db/jobs.js';
 import { addScrapeLog } from '../db/scrapeLog.js';
 import { getCrawlSettings } from '../db/settings.js';
 import { logger } from '../utils/logger.js';
+import { randomDelayMs } from '../crawler/stealth.js';
 
 let queue = null;
 
@@ -17,14 +18,15 @@ function getQueue() {
 
 export async function enqueueJob(job) {
   const q = getQueue();
-  const { delayMs, timeoutMs } = getCrawlSettings();
+  const { delayMinMs, delayMaxMs, delayMs } = getCrawlSettings();
 
   return q.add(async () => {
     logger.info('Processing job', { jobId: job.id, url: job.url });
     updateJobStatus(job.id, 'running');
 
     try {
-      await new Promise((r) => setTimeout(r, delayMs));
+      const waitMs = randomDelayMs(delayMinMs, delayMaxMs) || delayMs;
+      await new Promise((r) => setTimeout(r, waitMs));
       await processJob(job);
     } catch (err) {
       logger.error('Job processing error', { jobId: job.id, error: err.message });
