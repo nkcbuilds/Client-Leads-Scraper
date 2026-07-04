@@ -1,0 +1,135 @@
+name: Desktop Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            build_script: desktop:build:win
+            artifact_glob: |
+              dist/*.exe
+              dist/*.blockmap
+              dist/latest.yml
+          - os: macos-latest
+            platform: mac
+            build_script: desktop:build:mac
+            artifact_glob: |
+              dist/*.dmg
+              dist/*.zip
+              dist/latest-mac.yml
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Compute desktop release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+            $tag = "${{ github.ref_name }}"
+            $releaseName = "LegalReach $version"
+            $prerelease = "false"
+          } else {
+            $baseVersion = node -p "const pkg=require('./package.json'); [pkg.version.split('.')[0], pkg.version.split('.')[1]].join('.')"
+            $version = "$baseVersion.${{ github.run_number }}"
+            $tag = "desktop-main-${{ github.run_number }}"
+            $releaseName = "LegalReach Desktop $version"
+            $prerelease = "false"
+          }
+
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "release_name=$releaseName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "prerelease=$prerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Stamp desktop package version for this release
+        shell: pwsh
+        run: |
+          $path = "package.json"
+          $json = Get-Content $path -Raw | ConvertFrom-Json
+          $json.version = "${{ steps.meta.outputs.version }}"
+          $json | ConvertTo-Json -Depth 100 | Set-Content $path
+
+      - name: Run backend tests
+        run: npm test
+        working-directory: backend
+
+      - name: Build desktop app
+        run: npm run ${{ matrix.build_script }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('desktop-main-{0}', github.run_number) }}
+          name: ${{ github.ref_type == 'tag' && format('LegalReach {0}', github.ref_name) || format('LegalReach Desktop 1.0.{0}', github.run_number) }}
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-artifacts/**/*.exe
+            release-artifacts/**/*.blockmap
+            release-artifacts/**/*.yml
+            release-artifacts/**/*.dmg
+            release-artifacts/**/*.zip

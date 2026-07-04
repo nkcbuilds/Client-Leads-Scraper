@@ -1,0 +1,128 @@
+{
+  "name": "legalreach-desktop",
+  "version": "1.0.0",
+  "description": "LegalReach desktop client for legal lead scraping",
+  "author": "nkcbuilds",
+  "private": true,
+  "type": "module",
+  "main": "desktop/main.js",
+  "scripts": {
+    "desktop:generate-icons": "node desktop/scripts/generate-icons.mjs",
+    "desktop:dev": "electron .",
+    "desktop:build:web": "npm run build --prefix frontend",
+    "desktop:build": "npm run desktop:build:web && electron-builder",
+    "desktop:build:win": "npm run desktop:build:web && electron-builder --win nsis",
+    "desktop:build:mac": "npm run desktop:build:web && electron-builder --mac dmg zip",
+    "desktop:dist": "npm run desktop:build",
+    "desktop:rebuild-native": "npx electron-rebuild -f -w better-sqlite3 --module-dir backend",
+    "postinstall": "electron-builder install-app-deps && npm run desktop:rebuild-native"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.1",
+    "@electron/notarize": "^2.5.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-updater": "^6.3.9",
+    "icon-gen": "^3.0.1",
+    "sharp": "^0.33.5"
+  },
+  "build": {
+    "appId": "com.legalreach.desktop",
+    "productName": "LegalReach",
+    "asar": true,
+    "files": [
+      "desktop/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "frontend/.next",
+        "to": "frontend/.next"
+      },
+      {
+        "from": "frontend/node_modules",
+        "to": "frontend/node_modules"
+      },
+      {
+        "from": "frontend/package.json",
+        "to": "frontend/package.json"
+      },
+      {
+        "from": "frontend/next.config.js",
+        "to": "frontend/next.config.js"
+      },
+      {
+        "from": "backend/src",
+        "to": "backend/src"
+      },
+      {
+        "from": "backend/node_modules",
+        "to": "backend/node_modules"
+      },
+      {
+        "from": "backend/package.json",
+        "to": "backend/package.json"
+      },
+      {
+        "from": "backend/data",
+        "to": "backend/data",
+        "filter": [
+          "**/*",
+          "!legalreach.db-shm",
+          "!legalreach.db-wal"
+        ]
+      },
+      {
+        "from": ".env.example",
+        "to": ".env.example"
+      },
+      {
+        "from": "README.md",
+        "to": "README.md"
+      }
+    ],
+    "extraMetadata": {
+      "main": "desktop/main.js"
+    },
+    "directories": {
+      "buildResources": "desktop/assets",
+      "output": "dist"
+    },
+    "afterSign": "desktop/notarize.js",
+    "icon": "desktop/assets/icon.png",
+    "win": {
+      "icon": "desktop/assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "mac": {
+      "icon": "desktop/assets/icon.icns",
+      "category": "public.app-category.business",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "desktop/assets/entitlements.mac.plist",
+      "entitlementsInherit": "desktop/assets/entitlements.mac.plist",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "nkcbuilds",
+        "repo": "Client-Leads-Scraper"
+      }
+    ]
+  }
+}

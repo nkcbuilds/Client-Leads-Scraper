@@ -37,8 +37,6 @@ The application should:
 
 - Full multi-user SaaS
 - Full CRM integration
-- Automatic CAPTCHA solving
-- Aggressive anti-bot bypass systems
 - Massive distributed crawling
 
 ## 4. Source Document Reconciliation
@@ -439,7 +437,6 @@ The system must fail clearly, not silently.
 
 - Respect site terms and practical rate limits
 - Use conservative delays and concurrency
-- Do not build CAPTCHA-solving workflows into v1
 - Clearly log blocked sites for manual handling
 - Keep provenance for every extracted record
 - Never label guessed contact data as verified

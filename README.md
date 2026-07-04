@@ -139,6 +139,96 @@ Open **http://localhost:3000**, paste a URL (e.g. `https://www.lw.com/en/people`
 
 ---
 
+## Desktop App
+
+The project can also be shipped as a desktop app using **Electron** on both **Windows** and **macOS**. The desktop wrapper:
+
+- starts the backend API locally inside the app
+- starts the Next.js frontend locally and loads it in a native desktop window
+- checks for updates on launch with `electron-updater`
+- can auto-download a published release and prompt the client to restart
+- provisions a local Playwright Chromium runtime for scraping on clean client machines
+- exposes a desktop diagnostics panel in the Settings screen for service health, runtime paths, and startup events
+
+### Desktop development
+
+```bash
+npm install
+npm run desktop:dev
+```
+
+This runs the Electron shell and boots the local frontend/backend automatically.
+
+### Build for your current platform
+
+```bash
+npm run desktop:build
+```
+
+Artifacts are written to `dist/`.
+
+### Platform-specific builds
+
+```bash
+# Windows
+npm run desktop:build:win
+
+# macOS (run this on a Mac)
+npm run desktop:build:mac
+```
+
+Note: macOS artifacts must be built on macOS. Cross-building a proper `.dmg` from Windows is not the normal path.
+
+### Auto-update flow
+
+Auto updates work from **published releases**, not from every local git push by itself. The intended flow is:
+
+1. Push code changes
+2. Build a new desktop release
+3. Publish the generated installer + update artifacts to **GitHub Releases**
+4. Client app checks on startup, downloads the new version, and installs on restart
+
+The current Electron builder config is pointed at the GitHub repo listed in the repository metadata. If you want private distribution later, we can switch to a private release feed or a generic update server.
+
+### GitHub Actions desktop releases
+
+This repo now includes a GitHub Actions workflow at `.github/workflows/desktop-release.yml`.
+
+- pushes to `main` build and publish a fresh Windows desktop release automatically
+- tags like `v1.2.0` build and publish a versioned release using that tag
+- release assets include the installer, blockmap, and `latest.yml` required by `electron-updater`
+
+That means the client app can check GitHub Releases on startup and offer the newest installer build automatically after CI publishes it.
+
+### macOS note
+
+The desktop runtime is now structured to work on macOS as well:
+
+- backend and frontend run as child services instead of being loaded directly into Electron
+- runtime data (SQLite DB, browser sessions, Playwright browsers) is stored in the app user-data directory instead of inside the app bundle
+- Playwright Chromium is installed into app-managed storage on first run if needed
+
+For a polished macOS client rollout, you should still plan to complete:
+
+- Apple code signing
+- notarization with real Apple credentials
+
+Unsigned Mac builds can still be used for testing, but signed/notarized builds are the right path for normal client distribution and smoother auto-update behavior.
+
+The repo now includes:
+
+- generated desktop icons for Windows and macOS via `npm run desktop:generate-icons`
+- a mac entitlements file at `desktop/assets/entitlements.mac.plist`
+- a notarization hook at `desktop/notarize.js`
+- GitHub Actions environment hooks for:
+  - `APPLE_ID`
+  - `APPLE_APP_SPECIFIC_PASSWORD`
+  - `APPLE_TEAM_ID`
+
+Once those secrets are configured in GitHub, the Mac desktop release path is much closer to production-ready.
+
+---
+
 ## Configuration
 
 All settings live in `.env` at the project root (see `.env.example`).

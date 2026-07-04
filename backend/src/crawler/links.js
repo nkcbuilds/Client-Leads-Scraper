@@ -25,6 +25,11 @@ const PROFILE_TEXT_PATTERNS = [
   /learn\s+more/i,
 ];
 
+const NON_PROFILE_PATH_PATTERNS = [
+  /\/search(?:[/?#]|$)/i,
+  /[?&](?:q|query|search)=/i,
+];
+
 const EXCLUDE_PATH_PATTERNS = [
   /\/contact/i,
   /\/about/i,
@@ -116,6 +121,7 @@ export function findProfileLinks(links, baseUrl) {
   return links
     .filter((link) => isSameHost(link.url, baseUrl))
     .filter((link) => !EXCLUDE_PATH_PATTERNS.some((pattern) => pattern.test(link.url)))
+    .filter((link) => !NON_PROFILE_PATH_PATTERNS.some((pattern) => pattern.test(link.url)))
     .filter((link) => {
       const pathMatch = PROFILE_PATH_PATTERNS.some((pattern) => pattern.test(link.url));
       const textMatch = PROFILE_TEXT_PATTERNS.some((pattern) => pattern.test(link.text));

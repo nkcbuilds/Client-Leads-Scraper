@@ -4,6 +4,9 @@ backend/data/
 backend/logs/
 backend/output/
 frontend/.next/
+dist/
+release/
+desktop-out/
 *.db
 *.db-wal
 *.db-shm

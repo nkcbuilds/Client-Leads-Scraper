@@ -23,6 +23,14 @@ test('findProfileLinks excludes terms-of-use pages', () => {
   assert.ok(!profiles.some((u) => u.includes('terms-of-use')));
 });
 
+test('findProfileLinks excludes search-style URLs that are not profiles', () => {
+  const badHtml = '<a href="/lawyer/search">Lawyer Search</a><a href="/en/people/jane">Jane</a>';
+  const links = extractLinks(badHtml, baseUrl);
+  const profiles = findProfileLinks(links, baseUrl);
+  assert.ok(!profiles.some((u) => u.includes('/search')));
+  assert.ok(profiles.some((u) => u.includes('/en/people/jane')));
+});
+
 test('findPaginationLink detects next page', () => {
   const links = extractLinks(html, baseUrl);
   const next = findPaginationLink(links, baseUrl);

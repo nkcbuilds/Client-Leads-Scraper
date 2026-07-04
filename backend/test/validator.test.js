@@ -16,6 +16,11 @@ test('validatePerson rejects low confidence', () => {
   assert.equal(result.valid, false);
 });
 
+test('validatePerson rejects judicial records without company', () => {
+  const result = validatePerson({ name: 'Alan C. Kay', title: 'Honorable', confidence: 0.9 });
+  assert.equal(result.valid, false);
+});
+
 test('isGarbageName rejects UI noise from directory pages', () => {
   assert.equal(isGarbageName('ClearExpand'), true);
   assert.equal(isGarbageName('Industry facetSearchLoadingAerospace'), true);

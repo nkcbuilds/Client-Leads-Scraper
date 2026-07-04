@@ -146,7 +146,8 @@ async function runLiveJob(site) {
     finding('MEDIUM', 'crawler', `${blocked.length} blocked page(s) on ${site.url}`, blocked.map((b) => b.url));
   }
 
-  if (site.type === 'profile_directory' && completed.pages_scraped <= 1 && people.length > 0) {
+  const skippedProfiles = summary.issues?.some((issue) => issue.includes('Skipped') && issue.includes('profile'));
+  if (site.type === 'profile_directory' && completed.pages_scraped <= 1 && people.length > 0 && !skippedProfiles) {
     finding('MEDIUM', 'crawler', `Profile directory ${site.url} only scraped 1 page but found ${people.length} records — profile pages not followed`);
   }
 

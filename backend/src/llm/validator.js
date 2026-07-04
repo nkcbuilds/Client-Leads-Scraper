@@ -21,6 +21,13 @@ const GARBAGE_FIELD_PATTERNS = [
   /aerospace/i,
 ];
 
+const NON_LEAD_TITLE_PATTERNS = [
+  /\bhonorable\b/i,
+  /\bjudge\b/i,
+  /\bjustice\b/i,
+  /\bmagistrate\b/i,
+];
+
 export function normalizeName(name) {
   if (!name) return '';
   return name.replace(/\s+/g, ' ').trim();
@@ -76,6 +83,10 @@ export function validatePerson(record) {
 
   if (!record.title && !record.company) {
     errors.push('Requires at least title or company');
+  }
+
+  if (!record.company && NON_LEAD_TITLE_PATTERNS.some((pattern) => pattern.test(record.title || ''))) {
+    errors.push('Looks like a judicial/non-lead record without company');
   }
 
   if (record.confidence !== undefined && record.confidence < 0.35) {
