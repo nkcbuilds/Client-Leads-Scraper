@@ -1,0 +1,28 @@
+{
+  "name": "legalreach-backend",
+  "version": "1.0.0",
+  "description": "LegalReach lead scraping backend",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/**/*.test.js",
+    "test:scrape": "node src/scripts/test-scrape.js",
+    "validate": "node src/scripts/validate-all.js",
+    "validate:live": "node src/scripts/validate-run.js",
+    "audit": "node src/scripts/audit-full.js",
+    "benchmark": "node src/scripts/benchmark-models.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "better-sqlite3": "^11.7.0",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "p-queue": "^8.0.1",
+    "playwright": "^1.49.1",
+    "xlsx": "^0.18.5"
+  }
+}
