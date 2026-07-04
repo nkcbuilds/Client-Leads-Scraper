@@ -15,14 +15,16 @@
     "desktop:build:mac": "npm run desktop:build:web && electron-builder --mac dmg zip",
     "desktop:dist": "npm run desktop:build",
     "desktop:rebuild-native": "npx electron-rebuild -f -w better-sqlite3 --module-dir backend",
-    "postinstall": "electron-builder install-app-deps && npm run desktop:rebuild-native"
+  "postinstall": "electron-builder install-app-deps && npm run desktop:rebuild-native"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
     "@electron/notarize": "^2.5.0",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
-    "electron-updater": "^6.3.9",
     "icon-gen": "^3.0.1",
     "sharp": "^0.33.5"
   },
